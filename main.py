@@ -74,71 +74,68 @@ np.set_printoptions(precision=3)
 print('Load the data')
 # This is a classification problem with 2 target classes.
 train = pd.read_csv('data/labeled.csv')
-print(train)
+#print(train)
 
-X = train.drop('y',axis=1)
+count_class_0, count_class_1 = train['y'].value_counts()
+
+print("Class Zero:", count_class_0)
+print("Class One:", count_class_1)
+
+df_class_0 = train[train['y'] == 0]
+df_class_1 = train[train['y'] == 1]
+
+
+#Random under-sampling feels illegal, so I don't want to do this.
+'''
+df_class_0_under = df_class_0.sample(count_class_1)
+df_test_under = pd.concat([df_class_0_under, df_class_1], axis=0)
+
+print('Random under-sampling:')
+print(df_test_under['y'].value_counts())
+'''
+df_class_1_over = df_class_1.sample(count_class_0, replace=True)
+df_test_over = pd.concat([df_class_0, df_class_1_over], axis=0)
+
+print('Random over-sampling:')
+print(df_test_over['y'].value_counts())
+
+df_test_over.to_csv('oversampling.csv')
+
+y_oversampled = df_test_over['y']
+X_oversampled = df_test_over.drop('y',axis=1)
+X_oversampled[['x1','x4','x8']] = X_oversampled[['x1','x4','x8']].replace('None', -1)
+X_oversampled = X_oversampled.to_numpy()
+y_oversampled = y_oversampled.to_numpy()
+
+brain = pd.read_csv('data/labeled.csv')
+X = brain.drop('y',axis=1)
 num_missing = (X[['x1','x2','x3','x4','x5','x6','x7','x8','x9','x10','x11','x12','x13','x14','x15','x16','x17','x18','x19','x20','x21']]=='None').sum()
 
 #As we can see, only x1, x4 and x8 have missing data.
-print(num_missing)
+#print(num_missing)
 
 # Here we will replace the missing data with '-1' values.
 X[['x1','x4','x8']] = X[['x1','x4','x8']].replace('None', -1)
 X = X.to_numpy()
-y = train['y']
+y = brain['y']
 y = y.to_numpy()
 
 print('Features:')
-print(X)
+#print(X)
 
 print('Targets:')
-print(y)
-
-from imblearn.over_sampling import RandomOverSampler
-ros = RandomOverSampler(random_state=0)
-X_resampled, y_resampled = ros.fit_resample(X, y)
+#print(y)
 
 print('Train the model and predict')
 scaler = RobustScaler()
 model = create_model()
-model.fit(X_resampled, y_resampled)
+model.fit(X_oversampled, y_oversampled)
+#model.fit(X, y)
 y_hat = model.predict(X)
 print(np.count_nonzero(y_hat))
 print(np.shape(y_hat))
 
-print('\n*******Produce output for sample data*******\n')
-unlabeled_data = pd.read_csv('data/unlabeled.csv')
-instances = unlabeled_data['instance']
-to_be_classified = unlabeled_data.drop(['instance', 'y'], axis=1)
-
-num_missing = (to_be_classified[['x1', 'x2', 'x3', 'x4', 'x5', 'x6', 'x7', 'x8', 'x9', 'x10', 'x11', 'x12', 'x13', 'x14', 'x15', 'x16', 'x17', 'x18', 'x19', 'x20', 'x21']] == 'None').sum()
-
-print('******NUMBER MISSING******\n')
-#As we can see, only x1, x4 and x8 have missing data.
-print(num_missing)
-
-# Here we will replace the missing data with 'None' values.
-to_be_classified[['x1', 'x4', 'x8']] = to_be_classified[['x1', 'x4', 'x8']].replace('None', -1)
-to_be_classified = to_be_classified.to_numpy()
-
-scaler.fit(X)
-scaler.transform(to_be_classified)
-
-y_hate = model.predict(to_be_classified)
-y_hate = model.predict(to_be_classified)
-print(np.count_nonzero(y_hate))
-print(np.shape(y_hate))
-
-print('*************PREDICTIONS************\n')
-output = pd.concat([instances, pd.Series(y_hate)], axis=1)
-print(output)
-
-print((output[0] == 1).sum())
-output.to_csv('output.csv')
-
-
-
-
+pd.DataFrame(y_hat).to_csv('y_hat.csv')
 
 print('Model evaluation (train)')
 print('Accuracy:')
@@ -171,10 +168,11 @@ for train, test in kfold.split(X, y):
     X_train = scaler.transform(X[train])
     X_test = scaler.transform(X[test])
 
-    X_resampled, y_resampled = ros.fit_resample(X_train, y[train])
+    #X_resampled, y_resampled = ros.fit_resample(X_train, y[train])
 
     model = create_model()
-    model.fit(X_resampled, y_resampled)
+    #model.fit(X_resampled, y_resampled)
+    model.fit(X_train, y[train])
     y_prob[test] = model.predict_proba(X_test)[:, 1]
     y_hat[test] = model.predict(X_test)
 
