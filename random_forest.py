@@ -8,6 +8,7 @@ from sklearn import model_selection
 import sklearn.model_selection
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
+from imblearn.over_sampling import SMOTE
 
 
 seed = 520
@@ -62,29 +63,11 @@ y = training_data['y']
 y = y.to_numpy()
 
 
-count_class_0, count_class_1 = training_data['y'].value_counts()
-
-print("Class Zero:", count_class_0)
-print("Class One:", count_class_1)
-
-df_class_0 = training_data[training_data['y'] == 0]
-df_class_1 = training_data[training_data['y'] == 1]
-
-df_class_1_over = df_class_1.sample(count_class_0, replace=True)
-df_test_over = pd.concat([df_class_0, df_class_1_over], axis=0)
-
-print('Random over-sampling:')
-print(df_test_over['y'].value_counts())
-
-y_oversampled = df_test_over['y']
-X_oversampled = df_test_over.drop('y',axis=1)
-X_oversampled[['x1','x4','x8']] = X_oversampled[['x1','x4','x8']].replace('None', -1)
-X_oversampled = X_oversampled.to_numpy()
-y_oversampled = y_oversampled.to_numpy()
-
-
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=42)
 
+sm = SMOTE(random_state=12, sampling_strategy=1.0)
+x_res, y_res = sm.fit_sample(X_train, y_train)
+print(np.bincount(y_res))
 
 print('Features:')
 print(X)
@@ -92,7 +75,7 @@ print(X)
 print('Targets:')
 print(y)
 
-'''
+
 print("Let's look for some poggers hyperparameters")
 from sklearn.model_selection import GridSearchCV
 # Create the parameter grid based on the results of random search
@@ -113,23 +96,23 @@ grid_search = GridSearchCV(estimator = rf, param_grid = param_grid,
                           cv = 3, n_jobs = -1, verbose = 2)
 
 # Fit the grid search to the data
-grid_search.fit(X_train, y_train)
+grid_search.fit(x_res, y_res)
 print("best params baby")
 print(grid_search.best_params_)
 best_grid = grid_search.best_estimator_
 print("best grid", best_grid)
 
-'''
-
 
 print('Train the model and predict')
 scaler = create_scaler()
 model = create_model()
-scaler.fit(X_train)
-X_train_scaled = scaler.transform(X_train)
+#scaler.fit(X_train)
+#X_train_scaled = scaler.transform(X_train)
+scaler.fit(x_res)
+X_train_resampled_scaled = scaler.transform(x_res)
 X_test_scaled = scaler.transform(X_test)
-model.fit(X_train_scaled, y_train)
-y_train_hat = model.predict(X_train_scaled)
+#model.fit(X_train_scaled, y_train)
+model.fit(X_train_resampled_scaled, y_res)
 y_test_hat = model.predict(X_test_scaled)
 
 print('Model evaluation (train):')
@@ -157,12 +140,20 @@ for cv_train, cv_test in kfold.split(X, y):
 
     # Scaling train and test data
     # Train scaler on training set only
-    scaler.fit(X[cv_train])
-    X_cv_train = scaler.transform(X[cv_train])
+
+    sm = SMOTE(random_state=12, sampling_strategy=1.0)
+    x_res_cv, y_res_cv = sm.fit_sample(X[cv_train], y[cv_train])
+    print(np.bincount(y_res_cv))
+    scaler.fit(x_res_cv)
+    X_cv_res_train = scaler.transform(x_res_cv)
+
+    #scaler.fit(X[cv_train])
+    #X_cv_train = scaler.transform(X[cv_train])
     X_cv_test = scaler.transform(X[cv_test])
 
     model = create_model()
-    model.fit(X_cv_train, y[cv_train])
+    #model.fit(X_cv_train, y[cv_train])
+    model.fit(X_cv_res_train, y_res_cv)
     y_cv_hat[cv_test] = model.predict(X_cv_test)
 
 print('Model evaluation (CV):')
